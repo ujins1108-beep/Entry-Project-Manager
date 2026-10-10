@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>엔트리 프로젝트 매니저</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f2f5fa;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      width: 440px;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      display: flex;
+      min-height: 68px;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 18px;
+      border-radius: 0 0 15px 15px;
+      color: #fff;
+      background: linear-gradient(110deg, #14284b, #203d70);
+      box-shadow: 0 5px 14px #172e5626;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      justify-content: center;
+      gap: 12px;
+    }
+    .brand img {
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      border: 1px solid #ffffff28;
+      border-radius: 11px;
+      object-fit: cover;
+    }
+    .brand-copy { min-width: 0; }
+    h1 {
+      margin: 0;
+      color: #fff;
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      line-height: 1.25;
+      text-align: center;
+    }
+    main {
+      display: flex;
+      min-height: 390px;
+      flex-direction: column;
+      padding: 22px;
+    }
+    .intro {
+      margin: 0 0 15px;
+      color: #687489;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .menu-heading {
+      margin: 0 0 10px 2px;
+      color: #69758a;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    nav {
+      display: grid;
+      gap: 9px;
+      margin-top: auto;
+    }
+    .menu-button {
+      display: flex;
+      min-height: 82px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 18px;
+      border: 1px solid #ffffff40;
+      border-radius: 15px;
+      color: #fff;
+      background: linear-gradient(110deg, #172e56, #254b83);
+      box-shadow: 0 8px 18px #172e561f;
+      font: inherit;
+      font-size: 18px;
+      font-weight: 800;
+      text-align: left;
+      cursor: pointer;
+      transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
+    }
+    .menu-button:hover:not(:disabled) {
+      filter: brightness(1.08);
+      transform: translateY(-2px);
+      box-shadow: 0 11px 22px #172e562b;
+    }
+    #open-stats {
+      background: linear-gradient(110deg, #12857e, #20a99e);
+      box-shadow: 0 8px 18px #12857e24;
+    }
+    .menu-button:focus-visible {
+      outline: 3px solid #347ed8;
+      outline-offset: 3px;
+    }
+    .menu-button:disabled { cursor: not-allowed; opacity: .62; }
+    .menu-copy { display: grid; gap: 2px; padding-left: 4px; }
+    .menu-title { line-height: 1.35; }
+    .menu-description { color: #d5deec; font-size: 12px; font-weight: 500; }
+    #open-stats .menu-description { color: #d9f2ef; }
+    .menu-arrow {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      place-items: center;
+      border: 1px solid #ffffff40;
+      border-radius: 50%;
+      background: #ffffff18;
+      font-size: 25px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    #status {
+      min-height: 38px;
+      margin: 15px 0 0;
+      padding: 9px 11px;
+      border: 1px solid #dce2eb;
+      border-radius: 9px;
+      color: #596579;
+      background: #fff;
+      font-size: 12px;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    footer {
+      padding: 0 17px 15px;
+      color: #7a8494;
+      font-size: 11px;
+      text-align: center;
+    }
+    #status[data-kind="error"] {
+      border-color: #efc9c9;
+      color: #9d2929;
+      background: #fff6f6;
+    }
+    #status[data-kind="success"] {
+      border-color: #bde7dc;
+      color: #087f78;
+      background: #f4fffc;
+    }
+    @media (max-width: 440px) {
+      body { width: 100%; min-width: 300px; }
+      h1 { font-size: 19px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="EPM-icon.png" alt="">
+      <div class="brand-copy">
+        <h1>엔트리 프로젝트 매니저</h1>
+      </div>
+    </div>
+  </header>
+  <main>
+    <p class="intro">내 작품 공개 설정과 작품별 통계를 확인합니다.</p>
+    <nav aria-label="프로젝트 관리 메뉴">
+      <p class="menu-heading">관리 메뉴</p>
+      <button class="menu-button" id="open-visibility" type="button">
+        <span class="menu-copy">
+          <span class="menu-title">작품 전체 공개/비공개</span>
+          <span class="menu-description">일괄 변경 · 제외 작품 관리</span>
+        </span>
+        <span class="menu-arrow" aria-hidden="true">›</span>
+      </button>
+      <button class="menu-button" id="open-stats" type="button">
+        <span class="menu-copy">
+          <span class="menu-title">작품 통계</span>
+          <span class="menu-description">공개 · 비공개 작품 현황</span>
+        </span>
+        <span class="menu-arrow" aria-hidden="true">›</span>
+      </button>
+    </nav>
+    <p id="status" role="status" aria-live="polite">엔트리 내 프로필 페이지에서 사용할 수 있습니다.</p>
+  </main>
+  <footer>작품은 삭제하지 않고 공개 상태만 변경합니다.</footer>
+  <script src="popup.js"></script>
+</body>
+</html>

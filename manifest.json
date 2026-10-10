@@ -1,0 +1,58 @@
+{
+    "manifest_version":  3,
+    "name":  "?뷀듃由??꾨줈?앺듃 留ㅻ땲?",
+    "version":  "1.7.3",
+    "description":  "???뷀듃由??꾨줈?앺듃??怨듦컻 ?곹깭? ?묓뭹 ?듦퀎瑜?愿由ы빀?덈떎.",
+    "icons":  {
+                  "16":  "EPM-icon-16.png",
+                  "48":  "EPM-icon-48.png",
+                  "128":  "EPM-icon-128.png"
+              },
+    "permissions":  [
+                        "activeTab",
+                        "storage"
+                    ],
+    "action":  {
+                   "default_title":  "?뷀듃由??꾨줈?앺듃 留ㅻ땲?",
+                   "default_icon":  {
+                                        "16":  "EPM-icon-16.png",
+                                        "48":  "EPM-icon-48.png",
+                                        "128":  "EPM-icon-128.png"
+                                    },
+                   "default_popup":  "popup.html"
+               },
+    "content_scripts":  [
+                            {
+                                "matches":  [
+                                                "https://playentry.org/*"
+                                            ],
+                                "js":  [
+                                           "page-bridge.js"
+                                       ],
+                                "run_at":  "document_start",
+                                "world":  "MAIN"
+                            },
+                            {
+                                "matches":  [
+                                                "https://playentry.org/profile/*"
+                                            ],
+                                "js":  [
+                                           "content.js"
+                                       ],
+                                "run_at":  "document_idle"
+                            }
+                        ],
+    "web_accessible_resources":  [
+                                     {
+                                         "resources":  [
+                                                           "EPM-icon-48.png"
+                                                       ],
+                                         "matches":  [
+                                                         "https://playentry.org/*"
+                                                     ]
+                                     }
+                                 ],
+    "host_permissions":  [
+                             "https://playentry.org/*"
+                         ]
+}
