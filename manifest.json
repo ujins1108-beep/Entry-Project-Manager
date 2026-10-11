@@ -1,8 +1,8 @@
 {
     "manifest_version":  3,
-    "name":  "?뷀듃由??꾨줈?앺듃 留ㅻ땲?",
-    "version":  "1.7.3",
-    "description":  "???뷀듃由??꾨줈?앺듃??怨듦컻 ?곹깭? ?묓뭹 ?듦퀎瑜?愿由ы빀?덈떎.",
+    "name":  "Entry Project Manager",
+    "version":  "1.9.0",
+    "description":  "엔트리 작품 관리를 쉽게 할 수 있게 해주는 확장 프로그램입니다.",
     "icons":  {
                   "16":  "EPM-icon-16.png",
                   "48":  "EPM-icon-48.png",
@@ -13,13 +13,12 @@
                         "storage"
                     ],
     "action":  {
-                   "default_title":  "?뷀듃由??꾨줈?앺듃 留ㅻ땲?",
+                   "default_title":  "Entry Project Manager",
                    "default_icon":  {
                                         "16":  "EPM-icon-16.png",
                                         "48":  "EPM-icon-48.png",
                                         "128":  "EPM-icon-128.png"
-                                    },
-                   "default_popup":  "popup.html"
+                                    }
                },
     "content_scripts":  [
                             {

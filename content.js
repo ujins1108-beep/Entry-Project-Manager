@@ -5,6 +5,8 @@
   const PAGE_SIZE = 100;
   const MAX_PROJECTS = 10000;
   const EXCLUDED_PROJECTS_STORAGE_PREFIX = "entryProjectManagerExcluded:";
+  const DELETE_EXCLUDED_PROJECTS_STORAGE_PREFIX =
+    "entryProjectManagerDeleteExcluded:";
   const SELECT_PROJECTS = `
     query SELECT_USER_PROJECTS(
       $user: String!
@@ -36,8 +38,17 @@
   let openManagerFromExtension = null;
   let openMainMenuFromExtension = null;
   let openStatsFromExtension = null;
+  let openDeleteFromExtension = null;
 
   function toggleWithPageAuthentication(projectId) {
+    return requestWithPageAuthentication("TOGGLE_PROJECT", projectId);
+  }
+
+  function deleteWithPageAuthentication(projectId) {
+    return requestWithPageAuthentication("DELETE_PROJECT", projectId);
+  }
+
+  function requestWithPageAuthentication(type, projectId) {
     return new Promise((resolve, reject) => {
       const requestId = crypto.randomUUID();
       const timeoutId = window.setTimeout(() => {
@@ -55,7 +66,7 @@
           event.source !== window ||
           event.origin !== window.location.origin ||
           message?.channel !== "entry-project-manager-auth-bridge" ||
-          message.type !== "TOGGLE_PROJECT_RESULT" ||
+          message.type !== `${type}_RESULT` ||
           message.requestId !== requestId
         ) {
           return;
@@ -74,7 +85,7 @@
       window.postMessage(
         {
           channel: "entry-project-manager-auth-bridge",
-          type: "TOGGLE_PROJECT",
+          type,
           requestId,
           projectId,
         },
@@ -98,6 +109,9 @@
   function graphql(operationName, query, variables) {
     if (operationName === "TOGGLE_ISOPEN_PROJECT") {
       return toggleWithPageAuthentication(variables.id);
+    }
+    if (operationName === "DELETE_PROJECT") {
+      return deleteWithPageAuthentication(variables.id);
     }
 
     const headers = {
@@ -171,8 +185,8 @@
       }
 
       if (
-        page.list.length === 0 ||
-        projects.length === previousProjectCount
+        (page.list.length === 0 && total !== 0) ||
+        (total !== 0 && projects.length === previousProjectCount)
       ) {
         throw new Error("작품 목록 일부를 불러오지 못해 변경을 중단했습니다.");
       }
@@ -203,6 +217,37 @@
         `"${project.name}" 작품 변경 실패 (엔트리 응답 코드: ${status ?? "없음"}).`,
       );
     }
+  }
+
+  async function deleteProject(project) {
+    const data = await graphql("DELETE_PROJECT", "", { id: project.id });
+    const result = data?.deleteProject;
+    const status = result?.status;
+    if (
+      !result ||
+      result.result === false ||
+      (status !== 0 &&
+        status !== "0" &&
+        status !== 200 &&
+        status !== "200")
+    ) {
+      throw new Error(
+        `"${project.name}" 작품 삭제 실패 (엔트리 응답 코드: ${status ?? "없음"}).`,
+      );
+    }
+  }
+
+  function getProfileDisplayName() {
+    const identity = [...document.querySelectorAll("strong")].find((element) =>
+      element.querySelector("em"),
+    );
+    if (!identity) return null;
+    const name = [...identity.childNodes]
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent)
+      .join("")
+      .trim();
+    return name || null;
   }
 
   function addStyles() {
@@ -285,6 +330,98 @@
         box-shadow:0 24px 75px #08132655;
       }
       #${ROOT_ID} .epm-menu-body { padding:22px; }
+      #${ROOT_ID} .epm-body.epm-delete-body { padding:30px 32px 32px; }
+      #${ROOT_ID} .epm-body.epm-delete-body [data-delete-open] {
+        width:100%;
+        min-height:54px;
+        margin-bottom:16px;
+      }
+      #${ROOT_ID} .epm-delete-status {
+        margin:0 0 16px;
+        color:var(--epm-muted);
+        font-size:14px;
+      }
+      #${ROOT_ID} .epm-delete-status[data-kind="error"] { color:#b42332; }
+      #${ROOT_ID} .epm-delete-status[data-kind="success"] { color:#11877f; }
+      #${ROOT_ID} .epm-action.epm-danger-action {
+        width:100%;
+        color:#fff;
+        background:linear-gradient(110deg,#963d47,#bd3f4b);
+        box-shadow:0 4px 10px #963d4724;
+      }
+      #${ROOT_ID} .epm-delete-confirm-backdrop {
+        position:fixed;
+        inset:0;
+        z-index:2147483647;
+        display:grid;
+        place-items:center;
+        padding:18px;
+        background:#101a2cd9;
+        backdrop-filter:blur(4px);
+      }
+      #${ROOT_ID} .epm-delete-confirm-backdrop[hidden] { display:none; }
+      #${ROOT_ID} .epm-delete-confirm-modal {
+        width:min(500px,100%);
+        overflow:hidden;
+        border:1px solid #d5dce6;
+        border-radius:18px;
+        background:var(--epm-bg);
+        box-shadow:0 24px 75px #08132670;
+      }
+      #${ROOT_ID} .epm-delete-confirm-body { padding:22px; }
+      #${ROOT_ID} .epm-delete-confirm-warning {
+        margin:0 0 14px;
+        color:#a32734;
+        font-weight:800;
+      }
+      #${ROOT_ID} .epm-delete-confirm-detail {
+        margin:0 0 16px;
+        color:var(--epm-text);
+        overflow-wrap:anywhere;
+      }
+      #${ROOT_ID} .epm-delete-confirm-label {
+        display:block;
+        margin:0 0 7px;
+        color:var(--epm-text);
+        font-size:14px;
+        font-weight:750;
+      }
+      #${ROOT_ID} .epm-delete-confirm-input {
+        width:100%;
+        min-height:46px;
+        padding:10px 12px;
+        border:1px solid var(--epm-line);
+        border-radius:10px;
+        color:var(--epm-text);
+        background:#fff;
+        font:inherit;
+      }
+      #${ROOT_ID} .epm-delete-confirm-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px;
+        margin-top:16px;
+      }
+      #${ROOT_ID} .epm-delete-confirm-actions .epm-action { width:100%; }
+      #${ROOT_ID} .epm-delete-log {
+        max-height:180px;
+        margin:12px 0 0;
+        padding:0;
+        overflow:auto;
+        list-style:none;
+      }
+      #${ROOT_ID} .epm-delete-log li {
+        padding:6px 0;
+        border-top:1px solid var(--epm-line);
+        font-size:13px;
+        overflow-wrap:anywhere;
+      }
+      #${ROOT_ID} .epm-body.epm-delete-body .epm-excluded {
+        margin-top:0;
+        padding:20px;
+      }
+      #${ROOT_ID} .epm-body.epm-delete-body .epm-stats-actions { margin-top:20px; }
+      #${ROOT_ID} .epm-delete-confirm-backdrop { z-index:2147483648; }
       #${ROOT_ID} .epm-menu-intro {
         margin:0 0 20px;
         color:var(--epm-muted);
@@ -321,10 +458,15 @@
         background:linear-gradient(110deg,#11877f,#20a99e);
         box-shadow:0 6px 15px #17a79724;
       }
+      #${ROOT_ID} .epm-menu-option[data-menu="delete"] {
+        background:linear-gradient(110deg,#963d47,#bd5962);
+        box-shadow:0 6px 15px #963d4724;
+      }
       #${ROOT_ID} .epm-menu-option-copy { display:grid; gap:3px; }
       #${ROOT_ID} .epm-menu-option-title { font-size:17px; font-weight:800; }
       #${ROOT_ID} .epm-menu-option-description { color:#dbe4f0; font-size:13px; font-weight:500; }
       #${ROOT_ID} .epm-menu-option[data-menu="stats"] .epm-menu-option-description { color:#d9f2ef; }
+      #${ROOT_ID} .epm-menu-option[data-menu="delete"] .epm-menu-option-description { color:#ffe4e6; }
       #${ROOT_ID} .epm-menu-option-arrow {
         display:grid;
         width:34px;
@@ -767,7 +909,8 @@
       #${ROOT_ID} .epm-action:disabled { cursor:wait; opacity:.55; }
       @media (max-width:520px) {
         #${ROOT_ID} .epm-backdrop,
-        #${ROOT_ID} .epm-menu-backdrop { padding:8px; }
+        #${ROOT_ID} .epm-menu-backdrop,
+        #${ROOT_ID} .epm-delete-confirm-backdrop { padding:8px; }
         #${ROOT_ID} .epm-modal { max-height:calc(100vh - 16px); border-radius:14px; }
         #${ROOT_ID} .epm-menu-modal { border-radius:14px; }
         #${ROOT_ID} .epm-menu-body { padding:16px 13px; }
@@ -777,6 +920,8 @@
         #${ROOT_ID} .epm-header { min-height:58px; gap:8px; padding:9px 12px; }
         #${ROOT_ID} .epm-logo { flex-basis:34px; width:34px; height:34px; }
         #${ROOT_ID} .epm-body { padding:14px 12px; }
+        #${ROOT_ID} .epm-body.epm-delete-body { padding:22px 18px 24px; }
+        #${ROOT_ID} .epm-body.epm-delete-body .epm-excluded { padding:16px; }
         #${ROOT_ID} .epm-stats { gap:8px; }
         #${ROOT_ID} .epm-ring { width:min(100%,170px); border-width:7px; }
         #${ROOT_ID} .epm-ring-inner { border-width:7px; }
@@ -829,9 +974,16 @@
                 </span>
                 <span class="epm-menu-option-arrow" aria-hidden="true">›</span>
               </button>
+              <button class="epm-menu-option" data-menu="delete" type="button">
+                <span class="epm-menu-option-copy">
+                  <span class="epm-menu-option-title">작품 전체 삭제</span>
+                  <span class="epm-menu-option-description">확인 후 내 작품을 모두 삭제</span>
+                </span>
+                <span class="epm-menu-option-arrow" aria-hidden="true">›</span>
+              </button>
             </div>
             <div class="epm-menu-footer">
-              <span>작품은 삭제하지 않고 공개 상태만 변경합니다.</span>
+              <span>삭제는 취소할 수 없습니다. 실행 전에 계정명을 확인합니다.</span>
               <button class="epm-menu-close" data-menu-close type="button">닫기</button>
             </div>
           </div>
@@ -917,7 +1069,58 @@
           </div>
         </section>
       </div>
-      <div class="epm-backdrop" hidden>
+      <div class="epm-backdrop epm-delete-backdrop" hidden>
+        <section class="epm-modal" role="dialog" aria-modal="true" aria-labelledby="${ROOT_ID}-delete-title">
+          <header class="epm-header">
+            <img class="epm-logo" src="${iconUrl}" alt="" aria-hidden="true">
+            <h2 class="epm-title" id="${ROOT_ID}-delete-title">엔트리 작품 전체 삭제</h2>
+          </header>
+          <div class="epm-body epm-delete-body">
+            <button class="epm-action epm-danger-action" data-delete-open type="button" disabled>내 작품 전체 삭제</button>
+            <p class="epm-delete-status" data-delete-status role="status" aria-live="polite">계정과 작품 목록을 확인하고 있습니다.</p>
+            <section class="epm-excluded" aria-label="전체 삭제 안내">
+              <h3 class="epm-excluded-heading">작품 전체 삭제</h3>
+              <p class="epm-excluded-help">삭제된 작품은 복구할 수 없습니다. 삭제 전에 계정 이름을 정확히 입력하고 최종 확인해야 합니다.</p>
+              <h3 class="epm-excluded-heading" data-delete-excluded-heading>
+                <span>삭제 제외 작품</span>
+                <span><span data-delete-excluded-count>0</span>개</span>
+              </h3>
+              <p class="epm-excluded-help">작품 링크를 추가하면 전체 삭제에서 건너뜁니다. 공개/비공개 변경 제외 목록과 별도로 계정별 저장됩니다.</p>
+              <form class="epm-excluded-form" data-delete-excluded-form>
+                <input class="epm-excluded-input" data-delete-excluded-input type="url" inputmode="url" placeholder="https://playentry.org/project/작품ID" aria-label="삭제에서 제외할 엔트리 작품 링크" required>
+                <button class="epm-excluded-submit" data-delete-excluded-submit type="submit">링크 추가</button>
+              </form>
+              <p class="epm-excluded-message" data-delete-excluded-message aria-live="polite"></p>
+              <ul class="epm-excluded-list" data-delete-excluded-list aria-label="삭제 제외 작품 목록"></ul>
+              <ul class="epm-delete-log" data-delete-log aria-label="삭제 진행 내역"></ul>
+            </section>
+            <div class="epm-stats-actions">
+              <button class="epm-action" data-delete-refresh type="button">↻ 목록 다시 확인</button>
+              <button class="epm-action" data-delete-menu type="button">메인 메뉴</button>
+              <button class="epm-action" data-delete-close type="button">닫기</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="epm-delete-confirm-backdrop" data-delete-confirm-backdrop hidden>
+        <section class="epm-delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="${ROOT_ID}-delete-confirm-title">
+          <header class="epm-header">
+            <img class="epm-logo" src="${iconUrl}" alt="" aria-hidden="true">
+            <h2 class="epm-title" id="${ROOT_ID}-delete-confirm-title">작품 전체 삭제 확인</h2>
+          </header>
+          <div class="epm-delete-confirm-body">
+            <p class="epm-delete-confirm-warning">이 작업은 되돌릴 수 없습니다.</p>
+            <p class="epm-delete-confirm-detail" data-delete-confirm-detail></p>
+            <label class="epm-delete-confirm-label" for="${ROOT_ID}-delete-confirm-input">계정 이름을 똑같이 입력하세요.</label>
+            <input class="epm-delete-confirm-input" id="${ROOT_ID}-delete-confirm-input" data-delete-confirm-input type="text" autocomplete="off" spellcheck="false">
+            <div class="epm-delete-confirm-actions">
+              <button class="epm-action" data-delete-cancel type="button">취소</button>
+              <button class="epm-action epm-danger-action" data-delete-confirm type="button" disabled>삭제 시작</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="epm-backdrop epm-manager-backdrop" hidden>
         <section class="epm-modal" role="dialog" aria-modal="true" aria-labelledby="${ROOT_ID}-title">
           <header class="epm-header">
             <img class="epm-logo" src="${iconUrl}" alt="" aria-hidden="true">
@@ -983,13 +1186,27 @@
     `;
     document.body.append(root);
 
-    const backdrop = root.querySelector(".epm-backdrop:not(.epm-stats-backdrop)");
+    const backdrop = root.querySelector(".epm-manager-backdrop");
     const launcher = root.querySelector(".epm-launcher");
     const menuBackdrop = root.querySelector(".epm-menu-backdrop");
     const statsBackdrop = root.querySelector(".epm-stats-backdrop");
     const statsResult = root.querySelector("[data-stats-result]");
-    const statsSummary = root.querySelector("[data-stats-summary]");
     const statsRefreshButton = root.querySelector("[data-stats-refresh]");
+    const deleteBackdrop = root.querySelector(".epm-delete-backdrop");
+    const deleteButton = root.querySelector("[data-delete-open]");
+    const deleteStatus = root.querySelector("[data-delete-status]");
+    const deleteLog = root.querySelector("[data-delete-log]");
+    const deleteConfirmBackdrop = root.querySelector("[data-delete-confirm-backdrop]");
+    const deleteConfirmDetail = root.querySelector("[data-delete-confirm-detail]");
+    const deleteConfirmInput = root.querySelector("[data-delete-confirm-input]");
+    const deleteConfirmButton = root.querySelector("[data-delete-confirm]");
+    const deleteCancelButton = root.querySelector("[data-delete-cancel]");
+    const deleteExcludedCount = root.querySelector("[data-delete-excluded-count]");
+    const deleteExcludedForm = root.querySelector("[data-delete-excluded-form]");
+    const deleteExcludedInput = root.querySelector("[data-delete-excluded-input]");
+    const deleteExcludedSubmit = root.querySelector("[data-delete-excluded-submit]");
+    const deleteExcludedMessage = root.querySelector("[data-delete-excluded-message]");
+    const deleteExcludedList = root.querySelector("[data-delete-excluded-list]");
     const refreshButton = root.querySelector("[data-refresh]");
     const resultText = root.querySelector("[data-result]");
     const resultIcon = root.querySelector("[data-result-icon]");
@@ -999,9 +1216,14 @@
     const percentText = root.querySelector(".epm-percent");
     const actionButtons = root.querySelectorAll('.epm-action[data-mode]:not([data-mode="close"])');
     let projects = null;
+    let deleteProjects = null;
+    let deleteExcludedProjects = [];
+    let deleteDisplayName = null;
     let excludedProjects = [];
     let excludedProjectsLoaded = false;
     const excludedStorageKey = `${EXCLUDED_PROJECTS_STORAGE_PREFIX}${userId}`;
+    const deleteExcludedStorageKey =
+      `${DELETE_EXCLUDED_PROJECTS_STORAGE_PREFIX}${userId}`;
     const excludedList = root.querySelector("[data-excluded-list]");
     const excludedCount = root.querySelector("[data-excluded-count]");
     const excludedForm = root.querySelector("[data-excluded-form]");
@@ -1066,22 +1288,21 @@
           );
         });
       }
-      const summaryValues = {
-        total: statsSummary.querySelector("[data-summary-total]"),
-        public: statsSummary.querySelector("[data-summary-public]"),
-        private: statsSummary.querySelector("[data-summary-private]"),
-      };
       const privatePercentage = projectList.length
         ? Math.round((privateCount / projectList.length) * 100)
         : 0;
       const publicPercentage = projectList.length
         ? Math.round((publicCount / projectList.length) * 100)
         : 0;
-      summaryValues.total.textContent = `${projectList.length}개`;
-      summaryValues.public.textContent =
-        `${publicCount}개 (${publicPercentage}%)`;
-      summaryValues.private.textContent =
-        `${privateCount}개 (${privatePercentage}%)`;
+      for (const [selector, value] of [
+        ["[data-summary-total]", `${projectList.length}개`],
+        ["[data-summary-public]", `${publicCount}개 (${publicPercentage}%)`],
+        ["[data-summary-private]", `${privateCount}개 (${privatePercentage}%)`],
+      ]) {
+        root.querySelectorAll(selector).forEach((element) => {
+          element.textContent = value;
+        });
+      }
       root.querySelector('[data-stat-awards="staff"]').textContent =
         `${staffPickedCount}개`;
       root.querySelector('[data-stat-awards="ranked"]').textContent =
@@ -1282,6 +1503,7 @@
     async function openManager() {
       menuBackdrop.hidden = true;
       statsBackdrop.hidden = true;
+      deleteBackdrop.hidden = true;
       backdrop.hidden = false;
       if (!projects) await loadProjects();
       if (!projects) {
@@ -1314,14 +1536,382 @@
     async function openStatistics() {
       menuBackdrop.hidden = true;
       backdrop.hidden = true;
+      deleteBackdrop.hidden = true;
       statsBackdrop.hidden = false;
       await loadStatistics();
     }
     openStatsFromExtension = openStatistics;
 
-    function openMainMenu() {
+    function addDeleteLog(message, kind = "info") {
+      const item = document.createElement("li");
+      item.dataset.kind = kind;
+      item.textContent = message;
+      deleteLog.append(item);
+      deleteLog.scrollTop = deleteLog.scrollHeight;
+    }
+
+    function getDeleteTargets(projectList) {
+      const excludedIds = new Set(
+        deleteExcludedProjects.map((excluded) => excluded.id),
+      );
+      return projectList.filter((project) => !excludedIds.has(project.id));
+    }
+
+    function updateDeleteEligibilityStatus() {
+      if (!deleteProjects) return;
+      const targetCount = getDeleteTargets(deleteProjects).length;
+      deleteButton.disabled = targetCount === 0;
+      deleteStatus.textContent =
+        `${deleteDisplayName} 계정의 작품 ${deleteProjects.length}개를 확인했습니다. ` +
+        `삭제 대상 ${targetCount}개 · 제외 ${deleteProjects.length - targetCount}개`;
+      deleteStatus.dataset.kind = "";
+      if (!targetCount) deleteStatus.textContent += " — 삭제할 작품이 없습니다.";
+    }
+
+    function renderDeleteExcludedProjects() {
+      deleteExcludedList.replaceChildren();
+      deleteExcludedCount.textContent = String(deleteExcludedProjects.length);
+      for (const excluded of deleteExcludedProjects) {
+        const item = document.createElement("li");
+        item.className = "epm-excluded-item";
+        const link = document.createElement("a");
+        link.href = excluded.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = excluded.name;
+        link.title = excluded.url;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "제외 해제";
+        remove.setAttribute("aria-label", `${excluded.name} 삭제 제외 해제`);
+        remove.addEventListener("click", async () => {
+          if (isRunning) return;
+          isRunning = true;
+          remove.disabled = true;
+          deleteExcludedSubmit.disabled = true;
+          try {
+            const updated = deleteExcludedProjects.filter(
+              (entry) => entry.id !== excluded.id,
+            );
+            await chrome.storage.local.set({
+              [deleteExcludedStorageKey]: updated,
+            });
+            deleteExcludedProjects = updated;
+            deleteExcludedMessage.textContent = "삭제 제외 목록에서 해제했습니다.";
+            deleteExcludedMessage.dataset.kind = "success";
+            renderDeleteExcludedProjects();
+            updateDeleteEligibilityStatus();
+          } catch (error) {
+            console.error("[엔트리 작품 전체 삭제] 제외 목록 저장 실패", error);
+            deleteExcludedMessage.textContent =
+              `제외 해제에 실패했습니다: ${error.message}`;
+            deleteExcludedMessage.dataset.kind = "error";
+          } finally {
+            isRunning = false;
+            deleteExcludedSubmit.disabled = false;
+          }
+        });
+        item.append(link, remove);
+        deleteExcludedList.append(item);
+      }
+      if (!deleteExcludedProjects.length) {
+        const empty = document.createElement("li");
+        empty.className = "epm-excluded-empty";
+        empty.textContent = "삭제에서 제외한 작품이 없습니다.";
+        deleteExcludedList.append(empty);
+      }
+    }
+
+    async function loadDeleteExcludedProjects() {
+      if (typeof chrome === "undefined" || !chrome.storage?.local) {
+        throw new Error(
+          "확장 프로그램 저장소를 사용할 수 없습니다. 삭제 제외 목록을 확인할 수 없습니다.",
+        );
+      }
+      const stored = await chrome.storage.local.get(deleteExcludedStorageKey);
+      const savedList = stored[deleteExcludedStorageKey];
+      if (savedList !== undefined && !Array.isArray(savedList)) {
+        throw new Error("저장된 삭제 제외 목록 형식이 올바르지 않습니다.");
+      }
+      deleteExcludedProjects = (savedList || []).filter(
+        (entry) =>
+          entry &&
+          typeof entry.id === "string" &&
+          typeof entry.name === "string" &&
+          typeof entry.url === "string",
+      );
+      renderDeleteExcludedProjects();
+    }
+
+    deleteExcludedForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (isRunning) return;
+      isRunning = true;
+      deleteExcludedSubmit.disabled = true;
+      deleteExcludedMessage.textContent = "";
+      delete deleteExcludedMessage.dataset.kind;
+      try {
+        await loadDeleteExcludedProjects();
+        const projectId = getProjectIdFromLink(deleteExcludedInput.value.trim());
+        if (deleteExcludedProjects.some((entry) => entry.id === projectId)) {
+          throw new Error("이미 삭제 제외 목록에 추가된 작품입니다.");
+        }
+        const project = deleteProjects?.find((entry) => entry.id === projectId);
+        const entry = {
+          id: projectId,
+          name: project?.name || `작품 (${projectId})`,
+          url: `https://playentry.org/project/${encodeURIComponent(projectId)}`,
+        };
+        const updated = [...deleteExcludedProjects, entry];
+        await chrome.storage.local.set({
+          [deleteExcludedStorageKey]: updated,
+        });
+        deleteExcludedProjects = updated;
+        renderDeleteExcludedProjects();
+        deleteExcludedInput.value = "";
+        deleteExcludedMessage.textContent =
+          "삭제 제외 목록에 저장했습니다. 이 작품은 전체 삭제에서 건너뜁니다.";
+        deleteExcludedMessage.dataset.kind = "success";
+        updateDeleteEligibilityStatus();
+      } catch (error) {
+        console.error("[엔트리 작품 전체 삭제] 제외 링크 추가 실패", error);
+        deleteExcludedMessage.textContent = error.message;
+        deleteExcludedMessage.dataset.kind = "error";
+      } finally {
+        isRunning = false;
+        deleteExcludedSubmit.disabled = false;
+      }
+    });
+
+    async function loadDeleteSnapshot() {
+      if (isRunning) return;
+      isRunning = true;
+      deleteProjects = null;
+      deleteButton.disabled = true;
+      deleteStatus.textContent = "계정 이름과 전체 작품 목록을 확인하고 있습니다...";
+      deleteStatus.dataset.kind = "";
+      try {
+        const displayName = getProfileDisplayName();
+        if (!displayName) {
+          throw new Error("프로필에서 계정 이름을 확인하지 못했습니다. 페이지를 새로고침해 주세요.");
+        }
+        await loadDeleteExcludedProjects();
+        const foundProjects = await fetchAllProjects(userId);
+        deleteDisplayName = displayName;
+        deleteProjects = foundProjects;
+        if (foundProjects.length === 0) {
+          deleteStatus.textContent = `${displayName} 계정의 작품이 없습니다. 삭제할 작품이 없습니다.`;
+          return;
+        }
+        updateDeleteEligibilityStatus();
+      } catch (error) {
+        console.error("[엔트리 작품 전체 삭제] 목록 확인 실패", error);
+        deleteStatus.textContent = `작품 목록을 확인하지 못했습니다: ${error.message}`;
+        deleteStatus.dataset.kind = "error";
+        throw error;
+      } finally {
+        isRunning = false;
+      }
+    }
+
+    function showDeleteConfirmation() {
+      const targets = getDeleteTargets(deleteProjects || []);
+      if (isRunning || !targets.length || !deleteDisplayName) return;
+      deleteConfirmDetail.textContent =
+        `${deleteDisplayName} 계정 작품 ${targets.length}개를 삭제합니다. ` +
+        `삭제 제외 ${deleteProjects.length - targets.length}개는 유지됩니다. 삭제 후 복구할 수 없습니다.`;
+      deleteConfirmInput.value = "";
+      deleteConfirmButton.disabled = true;
+      deleteConfirmBackdrop.hidden = false;
+      deleteConfirmInput.focus();
+    }
+
+    function closeDeleteConfirmation() {
+      if (isRunning) return;
+      deleteConfirmBackdrop.hidden = true;
+      deleteConfirmInput.value = "";
+      deleteConfirmButton.disabled = true;
+    }
+
+    async function performDelete() {
+      if (
+        isRunning ||
+        !deleteProjects?.length ||
+        !deleteDisplayName ||
+        deleteConfirmInput.value !== deleteDisplayName
+      ) {
+        return;
+      }
+      isRunning = true;
+      deleteButton.disabled = true;
+      deleteConfirmInput.disabled = true;
+      deleteCancelButton.disabled = true;
+      deleteConfirmButton.disabled = true;
+      deleteLog.replaceChildren();
+      deleteStatus.textContent = "삭제 직전 계정과 작품 목록을 다시 확인하고 있습니다...";
+      deleteStatus.dataset.kind = "";
+      const originalProjects = [...deleteProjects];
+      const confirmedExcludedIds = new Set(
+        deleteExcludedProjects.map((project) => project.id),
+      );
+      let attemptedProject = null;
+      let failure = null;
+
+      try {
+        if (getProfileDisplayName() !== deleteDisplayName) {
+          throw new Error("계정 이름이 변경되었거나 확인할 수 없어 삭제를 중단했습니다.");
+        }
+        await loadDeleteExcludedProjects();
+        const currentExcludedIds = new Set(
+          deleteExcludedProjects.map((project) => project.id),
+        );
+        if (
+          confirmedExcludedIds.size !== currentExcludedIds.size ||
+          [...confirmedExcludedIds].some((id) => !currentExcludedIds.has(id))
+        ) {
+          deleteStatus.textContent =
+            "삭제 제외 목록이 확인 이후 변경되어 삭제를 시작하지 않았습니다. 목록을 확인한 뒤 다시 확인해 주세요.";
+          deleteStatus.dataset.kind = "error";
+          addDeleteLog("삭제 제외 목록이 바뀌어 삭제하지 않았습니다. 최신 제외 목록으로 다시 확인을 진행해 주세요.", "error");
+          deleteConfirmBackdrop.hidden = true;
+          deleteConfirmInput.value = "";
+          deleteButton.disabled = getDeleteTargets(deleteProjects).length === 0;
+          deleteConfirmInput.disabled = false;
+          deleteCancelButton.disabled = false;
+          isRunning = false;
+          return;
+        }
+        const currentProjects = await fetchAllProjects(userId);
+        const previousIds = deleteProjects.map((project) => project.id).sort();
+        const currentIds = currentProjects.map((project) => project.id).sort();
+        if (
+          previousIds.length !== currentIds.length ||
+          previousIds.some((id, index) => id !== currentIds[index])
+        ) {
+          deleteProjects = currentProjects;
+          deleteDisplayName = getProfileDisplayName();
+          deleteStatus.textContent =
+            `작품 목록이 확인 이후 변경되어 삭제를 중단했습니다. 현재 ${currentProjects.length}개입니다. 내용을 확인한 뒤 다시 시작해 주세요.`;
+          deleteStatus.dataset.kind = "error";
+          addDeleteLog("목록이 바뀌어 삭제를 시작하지 않았습니다. 다시 확인하고 새로 확인 절차를 진행해 주세요.", "error");
+          deleteConfirmBackdrop.hidden = true;
+          deleteConfirmInput.value = "";
+          updateDeleteEligibilityStatus();
+          deleteConfirmInput.disabled = false;
+          deleteCancelButton.disabled = false;
+          isRunning = false;
+          return;
+        }
+
+        const snapshot = getDeleteTargets(deleteProjects);
+        if (!snapshot.length) {
+          throw new Error("삭제 대상 작품이 없습니다. 제외 목록을 확인해 주세요.");
+        }
+        deleteStatus.textContent = `작품 삭제 중... (0/${snapshot.length})`;
+        addDeleteLog(
+          `확인 완료: ${deleteDisplayName} 계정에서 삭제 대상 ${snapshot.length}개를 처리합니다. ` +
+          `${deleteProjects.length - snapshot.length}개는 제외합니다.`,
+        );
+        let completed = 0;
+        for (const project of snapshot) {
+          attemptedProject = project;
+          await deleteProject(project);
+          completed += 1;
+          addDeleteLog(`[삭제 완료] ${project.name}`, "success");
+          deleteStatus.textContent = `작품 삭제 중... (${completed}/${snapshot.length})`;
+        }
+      } catch (error) {
+        failure = error instanceof Error ? error : new Error(String(error));
+        console.error("[엔트리 작품 전체 삭제]", failure);
+        addDeleteLog(
+          attemptedProject
+            ? `"${attemptedProject.name}" 처리 중 중단했습니다: ${failure.message}`
+            : failure.message,
+          "error",
+        );
+      }
+
+      deleteConfirmBackdrop.hidden = true;
+      try {
+        deleteStatus.textContent = "엔트리 서버에서 삭제 결과를 확인하고 있습니다...";
+        const remainingProjects = await fetchAllProjects(userId);
+        const originalIds = new Set(
+          getDeleteTargets(originalProjects).map((project) => project.id),
+        );
+        const allOriginalIds = new Set(
+          originalProjects.map((project) => project.id),
+        );
+        const remainingOriginal = remainingProjects.filter((project) =>
+          originalIds.has(project.id),
+        );
+        const remainingExcluded = remainingProjects.filter((project) =>
+          confirmedExcludedIds.has(project.id),
+        );
+        const newlyCreated = remainingProjects.filter(
+          (project) => !allOriginalIds.has(project.id),
+        ).length;
+        const deletedCount = originalIds.size - remainingOriginal.length;
+        deleteProjects = remainingProjects;
+        deleteDisplayName = getProfileDisplayName();
+        if (failure) {
+          deleteStatus.textContent =
+            `${deletedCount}개 삭제 확인, 삭제 대상 ${remainingOriginal.length}개 남음. 중단 사유: ${failure.message}`;
+          deleteStatus.dataset.kind = "error";
+          addDeleteLog(
+            `서버 목록 재확인: 삭제 대상 ${remainingOriginal.length}개, 제외 작품 ${remainingExcluded.length}개, 새 작품 ${newlyCreated}개가 남아 있습니다.`,
+            "error",
+          );
+        } else if (remainingOriginal.length > 0 || newlyCreated > 0) {
+          deleteStatus.textContent =
+            `삭제 요청은 끝났지만 확인되지 않은 작품이 있습니다. 삭제 대상 ${remainingOriginal.length}개, 새 작품 ${newlyCreated}개가 남았습니다. 제외 작품 ${remainingExcluded.length}개는 유지되었습니다.`;
+          deleteStatus.dataset.kind = "error";
+          addDeleteLog("서버 목록에서 모든 작품이 삭제된 것을 확인하지 못했습니다. 남은 작품은 자동으로 추가 삭제하지 않았습니다.", "error");
+        } else {
+          deleteStatus.textContent =
+            `완료: 작품 ${deletedCount}개를 삭제했습니다. 삭제 제외 ${remainingExcluded.length}개는 유지했습니다.`;
+          deleteStatus.dataset.kind = "success";
+          addDeleteLog(
+            `서버 목록에서 삭제 대상 ${deletedCount}개가 사라지고 제외 작품 ${remainingExcluded.length}개가 유지된 것을 확인했습니다.`,
+            "success",
+          );
+          if (!remainingProjects.length) {
+            window.setTimeout(() => window.location.reload(), 1800);
+          }
+        }
+        deleteButton.disabled = getDeleteTargets(remainingProjects).length === 0;
+      } catch (error) {
+        console.error("[엔트리 작품 전체 삭제] 결과 확인 실패", error);
+        deleteProjects = null;
+        deleteButton.disabled = true;
+        deleteStatus.textContent =
+          `삭제 요청 처리 후 결과를 확인하지 못했습니다: ${error.message} 프로필을 새로고침하고 목록을 다시 확인하세요.`;
+        deleteStatus.dataset.kind = "error";
+        addDeleteLog("결과를 검증하지 못했습니다. 성공 여부를 단정하지 않았습니다.", "error");
+      } finally {
+        deleteConfirmInput.disabled = false;
+        deleteCancelButton.disabled = false;
+        deleteConfirmInput.value = "";
+        isRunning = false;
+      }
+    }
+
+    async function openDeletePage() {
+      menuBackdrop.hidden = true;
       backdrop.hidden = true;
       statsBackdrop.hidden = true;
+      deleteBackdrop.hidden = false;
+      deleteConfirmBackdrop.hidden = true;
+      deleteStatus.textContent = "계정 이름과 전체 작품 목록을 확인하고 있습니다...";
+      await loadDeleteSnapshot();
+    }
+    openDeleteFromExtension = openDeletePage;
+
+    function openMainMenu() {
+      if (isRunning) return;
+      backdrop.hidden = true;
+      statsBackdrop.hidden = true;
+      deleteBackdrop.hidden = true;
+      deleteConfirmBackdrop.hidden = true;
       menuBackdrop.hidden = false;
     }
     openMainMenuFromExtension = openMainMenu;
@@ -1343,6 +1933,11 @@
     root.querySelector('[data-menu="stats"]').addEventListener("click", () => {
       void openStatistics().catch(() => {});
     });
+    root.querySelector('[data-menu="delete"]').addEventListener("click", () => {
+      void openDeletePage().catch((error) => {
+        console.error("[엔트리 작품 전체 삭제]", error);
+      });
+    });
     root.querySelector("[data-menu-close]").addEventListener("click", closeMainMenu);
     menuBackdrop.addEventListener("click", (event) => {
       if (event.target === menuBackdrop) closeMainMenu();
@@ -1354,6 +1949,30 @@
     statsBackdrop.addEventListener("click", (event) => {
       if (event.target === statsBackdrop) openMainMenu();
     });
+    root.querySelector("[data-delete-menu]").addEventListener("click", openMainMenu);
+    deleteButton.addEventListener("click", showDeleteConfirmation);
+    deleteConfirmInput.addEventListener("input", () => {
+      deleteConfirmButton.disabled =
+        isRunning || deleteConfirmInput.value !== deleteDisplayName;
+    });
+    deleteConfirmButton.addEventListener("click", () => {
+      void performDelete();
+    });
+    deleteCancelButton.addEventListener("click", closeDeleteConfirmation);
+    deleteConfirmBackdrop.addEventListener("click", (event) => {
+      if (event.target === deleteConfirmBackdrop) closeDeleteConfirmation();
+    });
+    root.querySelector("[data-delete-refresh]").addEventListener("click", () => {
+      void loadDeleteSnapshot().catch(() => {});
+    });
+    root.querySelector("[data-delete-close]").addEventListener("click", () => {
+      if (isRunning) return;
+      deleteConfirmBackdrop.hidden = true;
+      deleteBackdrop.hidden = true;
+    });
+    deleteBackdrop.addEventListener("click", (event) => {
+      if (event.target === deleteBackdrop && !isRunning) deleteBackdrop.hidden = true;
+    });
     refreshButton.addEventListener("click", loadProjects);
     root.querySelector('[data-mode="close"]').addEventListener("click", closeManager);
     backdrop.addEventListener("click", (event) => {
@@ -1361,8 +1980,10 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        if (!menuBackdrop.hidden) closeMainMenu();
+        if (!deleteConfirmBackdrop.hidden) closeDeleteConfirmation();
+        else if (!menuBackdrop.hidden) closeMainMenu();
         else if (!statsBackdrop.hidden) openMainMenu();
+        else if (!deleteBackdrop.hidden) openMainMenu();
         else if (!backdrop.hidden) closeManager();
       }
     });
@@ -1489,6 +2110,7 @@
   if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const openStats = message?.type === "ENTRY_PROJECT_MANAGER_OPEN_STATS";
+      const openDelete = message?.type === "ENTRY_PROJECT_MANAGER_OPEN_DELETE";
       const openMenu = message?.type === "ENTRY_PROJECT_MANAGER_OPEN_MENU";
       const openVisibility =
         message?.type === "ENTRY_PROJECT_MANAGER_OPEN_VISIBILITY" ||
@@ -1496,6 +2118,7 @@
       if (
         !openVisibility &&
         !openStats &&
+        !openDelete &&
         !openMenu
       ) {
         return false;
@@ -1514,14 +2137,16 @@
       if (
         !openManagerFromExtension ||
         !openMainMenuFromExtension ||
-        !openStatsFromExtension
+        !openStatsFromExtension ||
+        !openDeleteFromExtension
       ) {
         showManager(pageUserId);
       }
       if (
         !openManagerFromExtension ||
         !openMainMenuFromExtension ||
-        !openStatsFromExtension
+        !openStatsFromExtension ||
+        !openDeleteFromExtension
       ) {
         sendResponse({
           ok: false,
@@ -1539,6 +2164,9 @@
           break;
         case openStats:
           openRequestedView = openStatsFromExtension();
+          break;
+        case openDelete:
+          openRequestedView = openDeleteFromExtension();
           break;
         case openVisibility:
           openRequestedView = openManagerFromExtension();

@@ -10,6 +10,14 @@
       }
     }
   `;
+  const DELETE_QUERY = `
+    mutation DELETE_PROJECT($id: ID!) {
+      deleteProject(id: $id) {
+        status
+        result
+      }
+    }
+  `;
   const pageFetch = window.fetch.bind(window);
   let pageAuthToken = null;
 
@@ -42,11 +50,15 @@
       event.source !== window ||
       event.origin !== window.location.origin ||
       message?.channel !== CHANNEL ||
-      message.type !== "TOGGLE_PROJECT"
+      !["TOGGLE_PROJECT", "DELETE_PROJECT"].includes(message.type)
     ) {
       return;
     }
 
+    const operation =
+      message.type === "DELETE_PROJECT"
+        ? { name: "DELETE_PROJECT", query: DELETE_QUERY }
+        : { name: "TOGGLE_ISOPEN_PROJECT", query: TOGGLE_QUERY };
     const requestId = message.requestId;
     const projectId = message.projectId;
     let response;
@@ -72,14 +84,14 @@
         if (csrfToken) headers["CSRF-Token"] = csrfToken;
 
         const result = await pageFetch(
-          `${window.location.origin}/graphql/TOGGLE_ISOPEN_PROJECT`,
+          `${window.location.origin}/graphql/${operation.name}`,
           {
             method: "POST",
             credentials: "include",
             headers,
             body: JSON.stringify({
-              operationName: "TOGGLE_ISOPEN_PROJECT",
-              query: TOGGLE_QUERY,
+              operationName: operation.name,
+              query: operation.query,
               variables: { id: projectId },
             }),
           },
@@ -108,7 +120,7 @@
     }
 
     window.postMessage(
-      { channel: CHANNEL, type: "TOGGLE_PROJECT_RESULT", requestId, ...response },
+      { channel: CHANNEL, type: `${message.type}_RESULT`, requestId, ...response },
       window.location.origin,
     );
   });
